@@ -64,6 +64,7 @@ class PredictWrapper:
         # masked_select 找出mask位置的值
         predict_logits = logits.masked_select(predict_mask.unsqueeze(-1)).view(logits.size(0), -1)
         logddd.log(predict_logits.shape)
+        exit(0)
         # 返回推理结果
         return predict_logits
 
