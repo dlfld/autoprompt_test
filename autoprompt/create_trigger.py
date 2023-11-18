@@ -58,9 +58,12 @@ class PredictWrapper:
         model_inputs = replace_trigger_tokens(model_inputs, trigger_ids, trigger_mask)
         # 模型推理
         logits, *_ = self._model(**model_inputs)
+        import logddd
+        logddd.log(logits)
         # https://blog.csdn.net/qq_43049542/article/details/125821983
         # masked_select 找出mask位置的值
         predict_logits = logits.masked_select(predict_mask.unsqueeze(-1)).view(logits.size(0), -1)
+        logddd.log(predict_logits.shape)
         # 返回推理结果
         return predict_logits
 
@@ -91,6 +94,8 @@ class AccuracyFn:
         for label_ids in self._all_label_ids:
             label_logp = get_loss(predict_logits, label_ids.repeat(bsz, 1))
             all_label_logp.append(label_logp)
+        #     官方解释：沿着一个新维度对输入张量序列进行连接。 序列中所有的张量都应该为相同形状。
+        # 浅显说法：把多个2维的张量凑成一个3维的张量；多个3维的凑成一个4维的张量…以此类推，也就是在增加新的维度进行堆叠。
         all_label_logp = torch.stack(all_label_logp, dim=-1)
         _, predictions = all_label_logp.max(dim=-1)
         predictions = [self._pred_to_label[x] for x in predictions.tolist()]
@@ -270,6 +275,7 @@ def run_model(args):
     # NOTE: Accuracy can only be computed if a fixed pool of labels is given, which currently
     # requires the label map to be specified. Since producing a label map may be cumbersome (e.g.,
     # for link prediction tasks), we just use (negative) loss as the evaluation metric in these cases.
+    # 只有给定固定的标签池，才能计算准确性，目前需要指定标签映射，由于生成标签映射很麻烦，
     if label_map:
         evaluation_fn = AccuracyFn(tokenizer, label_map, device)
     else:

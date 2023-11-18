@@ -107,7 +107,7 @@ def encode_label(tokenizer, label, tokenize=False):
 class TriggerTemplatizer:
     """
     An object to facilitate creating transformers-friendly triggers inputs from a template.
-
+    我理解的就是模板构造器，就是根据模板构造提示句子
     Parameters
     ==========
     template : str
@@ -188,7 +188,6 @@ class TriggerTemplatizer:
             label=label,
             tokenize=self._tokenize_labels
         )
-
         return model_inputs, label_id
 
 
@@ -235,6 +234,7 @@ def load_trigger_dataset(fname, templatizer, use_ctx, limit=None):
         try:
             if use_ctx:
                 # For relation extraction, skip facts that don't have context sentence
+                # 如果数据集里面的这条数据没有具体的mask句子（evidences）存储的原始加mask的句子
                 if 'evidences' not in x:
                     logger.warning('Skipping RE sample because it lacks context sentences: {}'.format(x))
                     continue
@@ -242,12 +242,17 @@ def load_trigger_dataset(fname, templatizer, use_ctx, limit=None):
                 evidences = x['evidences']
                     
                 # Randomly pick a context sentence
+                # 随机选取上下文
                 obj_surface, masked_sent = random.choice([(evidence['obj_surface'], evidence['masked_sentence']) for evidence in evidences])
-                words = masked_sent.split()
-                if len(words) > MAX_CONTEXT_LEN:
-                    # If the masked sentence is too long, use the first X tokens. For training we want to keep as many samples as we can.
-                    masked_sent = ' '.join(words[:MAX_CONTEXT_LEN])
-                
+                # words = masked_sent.split()
+                # 如果当前选则的单词超过了预设的单词数量，那就截断
+                # 不要这个设置
+                # if len(words) > MAX_CONTEXT_LEN:
+                #     # If the masked sentence is too long, use the first X tokens. For training we want to keep as many samples as we can.
+                #     masked_sent = ' '.join(words[:MAX_CONTEXT_LEN])
+
+                # 我理解的意思是，当前是随机抽取的上下文，这个上下文内肯定就不能有MASK了，因此如果
+                # 抽取到的上下文中有mask，那就需要将它替换为其他的token
                 # If truncated context sentence still has MASK, we need to replace it with object surface
                 # We explicitly use [MASK] because all TREx fact's context sentences use it
                 context = masked_sent.replace('[MASK]', obj_surface)
