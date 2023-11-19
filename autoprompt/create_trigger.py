@@ -332,6 +332,7 @@ def run_model(args):
         labels = labels.to(device)
         with torch.no_grad():
             logddd.log(model_inputs)
+            logddd.log(trigger_ids)
             exit(0)
             predict_logits = predictor(model_inputs, trigger_ids)
         numerator += evaluation_fn(predict_logits, labels).sum().item()
