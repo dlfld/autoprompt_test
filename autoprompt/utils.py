@@ -244,25 +244,27 @@ def load_trigger_dataset(fname, templatizer, use_ctx, limit=None):
                 # 随机选取上下文
                 obj_surface, masked_sent = random.choice([(evidence['obj_surface'], evidence['masked_sentence']) for evidence in evidences])
 
-                # words = masked_sent.split()
+                words = masked_sent.split()
                 # 如果当前选则的单词超过了预设的单词数量，那就截断
                 # 不要这个设置
-                # if len(words) > MAX_CONTEXT_LEN:
-                #     # If the masked sentence is too long, use the first X tokens. For training we want to keep as many samples as we can.
-                #     masked_sent = ' '.join(words[:MAX_CONTEXT_LEN])
+                if len(words) > MAX_CONTEXT_LEN:
+                    # If the masked sentence is too long, use the first X tokens. For training we want to keep as many samples as we can.
+                    masked_sent = ' '.join(words[:MAX_CONTEXT_LEN])
 
                 # 我理解的意思是，当前是随机抽取的上下文，这个上下文内肯定就不能有MASK了，因此如果
                 # 抽取到的上下文中有mask，那就需要将它替换为其他的token
                 # If truncated context sentence still has MASK, we need to replace it with object surface
                 # We explicitly use [MASK] because all TREx fact's context sentences use it
                 context = masked_sent.replace('[MASK]', obj_surface)
-                logddd.log("\n\n\n")
-                logddd.log(context)
-                logddd.log("\n\n\n")
+                print("\n\n\n")
+                print(context)
+                print("\n\n\n")
 
                 x['context'] = context
                 model_inputs, label_id = templatizer(x)
             else:
+                logddd.log("进来的else")
+                exit(0)
                 model_inputs, label_id = templatizer(x)
         except ValueError as e:
             logger.warning('Encountered error "%s" when processing "%s".  Skipping.', e, x)
