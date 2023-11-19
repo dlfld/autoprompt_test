@@ -1,20 +1,19 @@
-import time
 import argparse
 import json
 import logging
-from pathlib import Path
 import random
+import time
+from pathlib import Path
 
 import numpy as np
 import torch
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
 import transformers
-from transformers import AutoConfig, AutoModelWithLMHead, AutoTokenizer
+from torch.utils.data import DataLoader
 from tqdm import tqdm
-import logddd
-import autoprompt.utils as utils
+from transformers import AutoConfig, AutoModelWithLMHead, AutoTokenizer
 
+import autoprompt.utils as utils
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +40,10 @@ class PredictWrapper:
     PyTorch transformers model wrapper. Handles necc. preprocessing of inputs for triggers
     experiments.
     """
-    def __init__(self, model):
+
+    def __init__(self, model, config=None):
         self._model = model
+        self.config = config
 
     def __call__(self, model_inputs, trigger_ids):
         # Copy dict so pop operations don't have unwanted side-effects
@@ -63,6 +64,9 @@ class PredictWrapper:
         # https://blog.csdn.net/qq_43049542/article/details/125821983
         # masked_select 找出mask位置的值
         predict_logits = logits.masked_select(predict_mask.unsqueeze(-1)).view(logits.size(0), -1)
+        logddd.log(predict_logits.shape)
+        if self.config is not None:
+            predict_logits = [score[1:self.config.class_num] for score in predict_logits]
         logddd.log(predict_logits.shape)
         exit(0)
         # 返回推理结果
@@ -200,8 +204,8 @@ def get_loss(predict_logits, label_ids):
 
     # 
     target_logp = predict_logp.gather(-1, label_ids)
-    logddd.log(target_logp)
-    exit(0)
+    # logddd.log(target_logp)
+    # exit(0)
     target_logp = target_logp - 1e32 * label_ids.eq(0)  # Apply mask
     target_logp = torch.logsumexp(target_logp, dim=-1)
     return -target_logp
@@ -554,6 +558,7 @@ if __name__ == '__main__':
     parser.add_argument('--patience', type=int, default=5)
     parser.add_argument('--num-cand', type=int, default=10)
     parser.add_argument('--sentence-size', type=int, default=50)
+    parser.add_argument('--class_num', type=int, default=15)
 
     parser.add_argument('--debug', action='store_true')
     args = parser.parse_args()
