@@ -66,7 +66,9 @@ class PredictWrapper:
         predict_logits = logits.masked_select(predict_mask.unsqueeze(-1)).view(logits.size(0), -1)
         logddd.log(predict_logits.shape)
         if self.config is not None:
-            predict_logits = [score[1:self.config.class_num] for score in predict_logits]
+            # 截取词性标签部分的预测输出
+            # predict_logits = [score[1:self.config.class_num + 1] for score in predict_logits]
+            predict_logits = predict_logits[:,1:self.config.class_num + 1,:]
         for item in predict_logits:
             logddd.log(item.shape)
         exit(0)
