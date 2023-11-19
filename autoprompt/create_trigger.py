@@ -333,6 +333,7 @@ def run_model(args):
         with torch.no_grad():
             logddd.log(model_inputs)
             logddd.log(trigger_ids)
+            logddd.log(labels)
             exit(0)
             predict_logits = predictor(model_inputs, trigger_ids)
         numerator += evaluation_fn(predict_logits, labels).sum().item()
