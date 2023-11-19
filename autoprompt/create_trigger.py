@@ -59,12 +59,12 @@ class PredictWrapper:
         model_inputs = replace_trigger_tokens(model_inputs, trigger_ids, trigger_mask)
         # 模型推理
         logits, *_ = self._model(**model_inputs)
-        import logddd
-        logddd.log(logits)
+        # import logddd
+        # logddd.log(logits)
         # https://blog.csdn.net/qq_43049542/article/details/125821983
         # masked_select 找出mask位置的值
         predict_logits = logits.masked_select(predict_mask.unsqueeze(-1)).view(logits.size(0), -1)
-        logddd.log(predict_logits.shape)
+        # logddd.log(predict_logits.shape)
         # 如果传入的配置，那就按照配置的方式，截取标签位置的结果
         if self.config is not None:
             # 截取词性标签部分的预测输出
@@ -331,6 +331,8 @@ def run_model(args):
         model_inputs = {k: v.to(device) for k, v in model_inputs.items()}
         labels = labels.to(device)
         with torch.no_grad():
+            logddd.log(model_inputs)
+            exit(0)
             predict_logits = predictor(model_inputs, trigger_ids)
         numerator += evaluation_fn(predict_logits, labels).sum().item()
         denominator += labels.size(0)
