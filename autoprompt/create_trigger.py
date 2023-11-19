@@ -65,12 +65,12 @@ class PredictWrapper:
         # masked_select 找出mask位置的值
         predict_logits = logits.masked_select(predict_mask.unsqueeze(-1)).view(logits.size(0), -1)
         logddd.log(predict_logits.shape)
+        # 如果传入的配置，那就按照配置的方式，截取标签位置的结果
         if self.config is not None:
             # 截取词性标签部分的预测输出
-            # predict_logits = [score[1:self.config.class_num + 1] for score in predict_logits]
             predict_logits = predict_logits[:,1:self.config.class_num + 1]
-        logddd.log(predict_logits.shape)
-        exit(0)
+        # logddd.log(predict_logits.shape)
+        # exit(0)
         # 返回推理结果
         return predict_logits
 
@@ -200,14 +200,11 @@ def replace_trigger_tokens(model_inputs, trigger_ids, trigger_mask):
 
 def get_loss(predict_logits, label_ids):
     # label_ids 是对应的label
+    logddd.log(predict_logits.shape)
+    logddd.log(label_ids.shape)
+    exit(0)
     predict_logp = F.log_softmax(predict_logits, dim=-1)
-    # logddd.log(predict_logp)
-    # logddd.log(label_ids)
-
-    # 
     target_logp = predict_logp.gather(-1, label_ids)
-    # logddd.log(target_logp)
-    # exit(0)
     target_logp = target_logp - 1e32 * label_ids.eq(0)  # Apply mask
     target_logp = torch.logsumexp(target_logp, dim=-1)
     return -target_logp
