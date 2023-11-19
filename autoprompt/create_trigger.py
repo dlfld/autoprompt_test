@@ -67,6 +67,7 @@ class PredictWrapper:
         logddd.log(predict_logits.shape)
         if self.config is not None:
             predict_logits = [score[1:self.config.class_num] for score in predict_logits]
+        predict_logits = torch.tensor(predict_logits)
         logddd.log(predict_logits.shape)
         exit(0)
         # 返回推理结果
