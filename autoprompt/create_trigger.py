@@ -69,8 +69,7 @@ class PredictWrapper:
             # 截取词性标签部分的预测输出
             # predict_logits = [score[1:self.config.class_num + 1] for score in predict_logits]
             predict_logits = predict_logits[:,1:self.config.class_num + 1]
-        for item in predict_logits:
-            logddd.log(item.shape)
+        logddd.log(predict_logits.shape)
         exit(0)
         # 返回推理结果
         return predict_logits
