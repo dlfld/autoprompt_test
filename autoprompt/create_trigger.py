@@ -4,6 +4,7 @@ import logging
 import random
 import time
 from pathlib import Path
+
 import logddd
 import numpy as np
 import torch
@@ -201,11 +202,9 @@ def replace_trigger_tokens(model_inputs, trigger_ids, trigger_mask):
 def get_loss(predict_logits, label_ids):
     # label_ids 是对应的label
     # logddd.log(predict_logits.shape)
-    logddd.log(label_ids.shape)
+
     predict_logp = F.log_softmax(predict_logits, dim=-1)
     target_logp = predict_logp.gather(-1, label_ids)
-    logddd.log(target_logp.shape)
-    exit(0)
     target_logp = target_logp - 1e32 * label_ids.eq(0)  # Apply mask
     target_logp = torch.logsumexp(target_logp, dim=-1)
     return -target_logp
@@ -231,9 +230,9 @@ def isupper(idx, tokenizer):
 
 
 def run_model(args):
-
     set_seed(args.seed)
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cpu')
 
     logger.info('Loading model, tokenizer, etc.')
     # 加载预训练模型
