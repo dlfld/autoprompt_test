@@ -200,10 +200,11 @@ def replace_trigger_tokens(model_inputs, trigger_ids, trigger_mask):
 
 def get_loss(predict_logits, label_ids):
     # label_ids 是对应的label
-    logddd.log(predict_logits.shape)
+    # logddd.log(predict_logits.shape)
     logddd.log(label_ids.shape)
-    exit(0)
     predict_logp = F.log_softmax(predict_logits, dim=-1)
+    logddd.log(predict_logp.shape)
+    exit(0)
     target_logp = predict_logp.gather(-1, label_ids)
     target_logp = target_logp - 1e32 * label_ids.eq(0)  # Apply mask
     target_logp = torch.logsumexp(target_logp, dim=-1)
@@ -331,9 +332,9 @@ def run_model(args):
         model_inputs = {k: v.to(device) for k, v in model_inputs.items()}
         labels = labels.to(device)
         with torch.no_grad():
-            logddd.log(model_inputs)
-            logddd.log(trigger_ids)
-            logddd.log(labels)
+            # logddd.log(model_inputs)
+            # logddd.log(trigger_ids)
+            # logddd.log(labels)
             # exit(0)
             predict_logits = predictor(model_inputs, trigger_ids)
             logddd.log(predict_logits.shape)
