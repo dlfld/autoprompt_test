@@ -336,7 +336,7 @@ def run_model(args):
             logddd.log(labels)
             # exit(0)
             predict_logits = predictor(model_inputs, trigger_ids)
-            logddd.log(predict_logits)
+            logddd.log(predict_logits.shape)
             exit(0)
         numerator += evaluation_fn(predict_logits, labels).sum().item()
         denominator += labels.size(0)
