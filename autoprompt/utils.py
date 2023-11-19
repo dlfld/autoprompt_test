@@ -103,6 +103,7 @@ def encode_label(tokenizer, label, tokenize=False):
 
 
 class TriggerTemplatizer:
+    # 这个类就是根据提示模板来构造提示句子的类
     """
     An object to facilitate creating transformers-friendly triggers inputs from a template.
     我理解的就是模板构造器，就是根据模板构造提示句子
@@ -231,6 +232,7 @@ def load_trigger_dataset(fname, templatizer, use_ctx, limit=None):
     for x in loader(fname):
         # 一行一行的加载json文件进来
         try:
+            # 默认的参数没有执行这个if，而是走到了else
             if use_ctx:
                 # For relation extraction, skip facts that don't have context sentence
                 # 如果数据集里面的这条数据没有具体的mask句子（evidences）存储的原始加mask的句子
@@ -263,9 +265,6 @@ def load_trigger_dataset(fname, templatizer, use_ctx, limit=None):
                 x['context'] = context
                 model_inputs, label_id = templatizer(x)
             else:
-                import logddd
-                logddd.log("进来的else")
-                exit(0)
                 model_inputs, label_id = templatizer(x)
         except ValueError as e:
             logger.warning('Encountered error "%s" when processing "%s".  Skipping.', e, x)

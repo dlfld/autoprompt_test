@@ -252,6 +252,7 @@ def run_model(args):
         label_map = None
         logger.info('No label map')
 
+    # 构造模板的方法
     templatizer = utils.TriggerTemplatizer(
         args.template,
         config,
@@ -292,6 +293,7 @@ def run_model(args):
         train_dataset = utils.load_augmented_trigger_dataset(args.train, templatizer, limit=args.limit)
     else:
         train_dataset = utils.load_trigger_dataset(args.train, templatizer, use_ctx=args.use_ctx, limit=args.limit)
+    logddd.log(train_dataset)
     exit(0)
     train_loader = DataLoader(train_dataset, batch_size=args.bsz, shuffle=True, collate_fn=collator)
 
