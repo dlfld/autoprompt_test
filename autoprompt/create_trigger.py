@@ -244,7 +244,7 @@ def run_model(args):
     # 获取中间梯度
     embedding_gradient = GradientStorage(embeddings)
 
-    predictor = PredictWrapper(model,config)
+    predictor = PredictWrapper(model,args)
 
     if args.label_map is not None:
         label_map = json.loads(args.label_map)
