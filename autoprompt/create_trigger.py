@@ -67,9 +67,9 @@ class PredictWrapper:
         predict_logits = logits.masked_select(predict_mask.unsqueeze(-1)).view(logits.size(0), -1)
         # logddd.log(predict_logits.shape)
         # 如果传入的配置，那就按照配置的方式，截取标签位置的结果
-        if self.config is not None:
-            # 截取词性标签部分的预测输出
-            predict_logits = predict_logits[:,1:self.config.class_num + 1]
+        # if self.config is not None:
+        #     # 截取词性标签部分的预测输出
+        #     predict_logits = predict_logits[:,1:self.config.class_num + 1]
         # logddd.log(predict_logits.shape)
         # exit(0)
         # 返回推理结果
