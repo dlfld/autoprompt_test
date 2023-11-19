@@ -202,7 +202,7 @@ def get_loss(predict_logits, label_ids):
     # label_ids 是对应的label
     logddd.log(predict_logits.shape)
     logddd.log(label_ids.shape)
-
+    exit(0)
     predict_logp = F.log_softmax(predict_logits, dim=-1)
     target_logp = predict_logp.gather(-1, label_ids)
     target_logp = target_logp - 1e32 * label_ids.eq(0)  # Apply mask
@@ -337,7 +337,7 @@ def run_model(args):
             # exit(0)
             predict_logits = predictor(model_inputs, trigger_ids)
             logddd.log(predict_logits.shape)
-            exit(0)
+            # exit(0)
         numerator += evaluation_fn(predict_logits, labels).sum().item()
         denominator += labels.size(0)
     dev_metric = numerator / (denominator + 1e-13)
