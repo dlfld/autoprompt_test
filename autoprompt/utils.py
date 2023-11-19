@@ -259,7 +259,7 @@ def load_trigger_dataset(fname, templatizer, use_ctx, limit=None):
                 logddd.log("\n\n\n")
                 logddd.log(context)
                 logddd.log("\n\n\n")
-                exit(0)
+
                 x['context'] = context
                 model_inputs, label_id = templatizer(x)
             else:
