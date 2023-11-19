@@ -287,7 +287,7 @@ def run_model(args):
 
     logger.info('Loading datasets')
     collator = utils.Collator(pad_token_id=tokenizer.pad_token_id)
-
+    # 是否增加扰动
     if args.perturbed:
         train_dataset = utils.load_augmented_trigger_dataset(args.train, templatizer, limit=args.limit)
     else:
@@ -559,6 +559,7 @@ if __name__ == '__main__':
     parser.add_argument('--use-ctx', action='store_true',
                         help='Use context sentences for relation extraction only')
     parser.add_argument('--perturbed', action='store_true',
+                        default=False,
                         help='Perturbed sentence evaluation of relation extraction: replace each object in dataset with a random other object')
     parser.add_argument('--patience', type=int, default=5)
     parser.add_argument('--num-cand', type=int, default=10)
