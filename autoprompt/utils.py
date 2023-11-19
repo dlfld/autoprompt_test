@@ -1,14 +1,12 @@
-import csv
 import copy
+import csv
 import json
 import logging
-from multiprocessing.sharedctypes import Value
 import random
 from collections import defaultdict
 
 import torch
 from torch.nn.utils.rnn import pad_sequence
-
 
 MAX_CONTEXT_LEN = 50
 
@@ -258,7 +256,9 @@ def load_trigger_dataset(fname, templatizer, use_ctx, limit=None):
                 # If truncated context sentence still has MASK, we need to replace it with object surface
                 # We explicitly use [MASK] because all TREx fact's context sentences use it
                 context = masked_sent.replace('[MASK]', obj_surface)
+                logddd.log("\n\n\n")
                 logddd.log(context)
+                logddd.log("\n\n\n")
                 exit(0)
                 x['context'] = context
                 model_inputs, label_id = templatizer(x)
