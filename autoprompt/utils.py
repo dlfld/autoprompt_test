@@ -231,6 +231,7 @@ def load_trigger_dataset(fname, templatizer, use_ctx, limit=None):
     instances = []
 
     for x in loader(fname):
+        # 一行一行的加载json文件进来
         try:
             if use_ctx:
                 # For relation extraction, skip facts that don't have context sentence
@@ -244,6 +245,7 @@ def load_trigger_dataset(fname, templatizer, use_ctx, limit=None):
                 # Randomly pick a context sentence
                 # 随机选取上下文
                 obj_surface, masked_sent = random.choice([(evidence['obj_surface'], evidence['masked_sentence']) for evidence in evidences])
+
                 # words = masked_sent.split()
                 # 如果当前选则的单词超过了预设的单词数量，那就截断
                 # 不要这个设置
@@ -256,6 +258,8 @@ def load_trigger_dataset(fname, templatizer, use_ctx, limit=None):
                 # If truncated context sentence still has MASK, we need to replace it with object surface
                 # We explicitly use [MASK] because all TREx fact's context sentences use it
                 context = masked_sent.replace('[MASK]', obj_surface)
+                logddd.log(context)
+                exit(0)
                 x['context'] = context
                 model_inputs, label_id = templatizer(x)
             else:
