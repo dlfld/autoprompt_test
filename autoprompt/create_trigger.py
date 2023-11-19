@@ -231,8 +231,8 @@ def isupper(idx, tokenizer):
 
 def run_model(args):
     set_seed(args.seed)
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    device = torch.device('cpu')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # device = torch.device('cpu')
 
     logger.info('Loading model, tokenizer, etc.')
     # 加载预训练模型
@@ -291,6 +291,8 @@ def run_model(args):
     if args.perturbed:
         train_dataset = utils.load_augmented_trigger_dataset(args.train, templatizer, limit=args.limit)
     else:
+        logddd.log("进来了")
+        exit(0)
         train_dataset = utils.load_trigger_dataset(args.train, templatizer, use_ctx=args.use_ctx, limit=args.limit)
     train_loader = DataLoader(train_dataset, batch_size=args.bsz, shuffle=True, collate_fn=collator)
 
