@@ -263,6 +263,7 @@ def load_trigger_dataset(fname, templatizer, use_ctx, limit=None):
                 x['context'] = context
                 model_inputs, label_id = templatizer(x)
             else:
+                import logddd
                 logddd.log("进来的else")
                 exit(0)
                 model_inputs, label_id = templatizer(x)
