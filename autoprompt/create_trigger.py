@@ -293,7 +293,7 @@ def run_model(args):
         train_dataset = utils.load_augmented_trigger_dataset(args.train, templatizer, limit=args.limit)
     else:
         train_dataset = utils.load_trigger_dataset(args.train, templatizer, use_ctx=args.use_ctx, limit=args.limit)
-    logddd.log(train_dataset)
+    logddd.log(train_dataset[0])
     exit(0)
     train_loader = DataLoader(train_dataset, batch_size=args.bsz, shuffle=True, collate_fn=collator)
 
