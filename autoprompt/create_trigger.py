@@ -202,7 +202,7 @@ def get_loss(predict_logits, label_ids):
     # label_ids 是对应的label
     logddd.log(predict_logits.shape)
     logddd.log(label_ids.shape)
-    exit(0)
+
     predict_logp = F.log_softmax(predict_logits, dim=-1)
     target_logp = predict_logp.gather(-1, label_ids)
     target_logp = target_logp - 1e32 * label_ids.eq(0)  # Apply mask
