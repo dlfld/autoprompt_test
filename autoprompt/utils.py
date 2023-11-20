@@ -5,6 +5,7 @@ import logging
 import random
 from collections import defaultdict
 
+import logddd
 import torch
 from torch.nn.utils.rnn import pad_sequence
 
@@ -139,6 +140,7 @@ class TriggerTemplatizer:
         self._template = template
         self._config = config
         self._tokenizer = tokenizer
+        # 标签字段名
         self._label_field = label_field
         self._label_map = label_map
         self._tokenize_labels = tokenize_labels
@@ -151,22 +153,35 @@ class TriggerTemplatizer:
 
     def __call__(self, format_kwargs):
         # Format the template string
+        # 整个输入 json
         format_kwargs = format_kwargs.copy()
+        # 将句子数据提到最外面
+        format_kwargs["masked_sentence"] = format_kwargs["evidences"][0]["masked_sentence"].replace("[MASK]", "[P]")
+        # format_kwargs["masked_sentence"] = format_kwargs["masked_sentence"].replace("[MASK]", "[P]")
+        # 获取到标签
         label = format_kwargs.pop(self._label_field)
         text = self._template.format(**format_kwargs)
+
         if label is None:
             raise Exception(f'Bad data: {text}')
 
         # Have the tokenizer encode the text and process the output to:
         # - Create a trigger and predict mask
         # - Replace the predict token with a mask token
+
+        # encode_plus 将文本分词后创建一个包含对应 id，token 类型及是否遮盖的词典；
+        # attention_mask 代表避免用注意力机制的时候关注到填充符 1代表没有mask的令牌，0代表mask的令牌
+        # token_type_ids token对应的句子id，值为0或1（0表示对应的token属于第一句，1表示属于第二句）
         model_inputs = self._tokenizer.encode_plus(
             text,
             add_special_tokens=self._add_special_tokens,
             return_tensors='pt'
         )
+
         input_ids = model_inputs['input_ids']
+        # trigger_mask 这个是trigger位置的标识向量，trigger位置位True
         trigger_mask = input_ids.eq(self._tokenizer.trigger_token_id)
+        # 需要预测的位置，用[P]来表示
         predict_mask = input_ids.eq(self._tokenizer.predict_token_id)
         input_ids[predict_mask] = self._tokenizer.mask_token_id
 
@@ -271,10 +286,11 @@ def load_trigger_dataset(fname, templatizer, use_ctx, limit=None):
             continue
         else:
             instances.append((model_inputs, label_id))
-    if limit:
-        return random.sample(instances, limit)
-    else:
-        return instances
+    return instances
+    # if limit:
+    #     return random.sample(instances, limit)
+    # else:
+    #     return instances
 
 
 def load_augmented_trigger_dataset(fname, templatizer, limit=None):

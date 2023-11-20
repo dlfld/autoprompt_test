@@ -9,3 +9,18 @@ termcolor==1.1.0
 colorama==0.4.1
 matplotlib==3.1.1
 pytest
+
+python -m autoprompt.create_trigger \
+    --train /Users/dailinfeng/Desktop/autoprompt_test/data/fact-retrieval/original/P17/train.jsonl \
+    --dev /Users/dailinfeng/Desktop/autoprompt_test/data/fact-retrieval/original/P17/dev.jsonl \
+    --template '<s> {sub_label} [T] [T] [T] [P] . </s>' \
+    --num-cand 10 \
+    --accumulation-steps 1 \
+    --model-name roberta-large \
+    --bsz 56 \
+    --eval-size 56 \
+    --iters 1000 \
+    --label-field 'obj_label' \
+    --tokenize-labels \
+    --filter \
+    --print-lama

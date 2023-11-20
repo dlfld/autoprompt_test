@@ -133,7 +133,8 @@ def load_pretrained(model_name):
     Loads pretrained HuggingFace config/model/tokenizer, as well as performs required
     initialization steps to facilitate working with triggers.
     """
-    model_name = "/home/dlf/autoprompt/model/bert_large_chinese"
+    model_name = "/Users/dailinfeng/Desktop/autoprompt_test/model/bert_large_chinese"
+    # model_name = "/home/dlf/autoprompt/model/bert_large_chinese"
     config = AutoConfig.from_pretrained(model_name)
     model = AutoModelWithLMHead.from_pretrained(model_name)
     model.eval()
@@ -258,6 +259,7 @@ def run_model(args):
         config,
         tokenizer,
         label_map=label_map,
+        # 标签字段名
         label_field=args.label_field,
         tokenize_labels=args.tokenize_labels,
         add_special_tokens=False,
@@ -288,13 +290,13 @@ def run_model(args):
 
     logger.info('Loading datasets')
     collator = utils.Collator(pad_token_id=tokenizer.pad_token_id)
-    # 是否增加扰动
+    # 是否增加扰动 目前都是不增加扰动
     if args.perturbed:
         train_dataset = utils.load_augmented_trigger_dataset(args.train, templatizer, limit=args.limit)
     else:
         train_dataset = utils.load_trigger_dataset(args.train, templatizer, use_ctx=args.use_ctx, limit=args.limit)
-    logddd.log(train_dataset[0])
-    exit(0)
+
+    # 分batch
     train_loader = DataLoader(train_dataset, batch_size=args.bsz, shuffle=True, collate_fn=collator)
 
     if args.perturbed:
@@ -529,9 +531,12 @@ def run_model(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--train', type=Path, required=True, help='Train data path')
-    parser.add_argument('--dev', type=Path, required=True, help='Dev data path')
-    parser.add_argument('--template', type=str, help='Template string')
+    parser.add_argument('--train', type=Path, help='Train data path',
+                        default="/Users/dailinfeng/Desktop/autoprompt_test/data/fact-retrieval/original/P17/train.jsonl")
+    parser.add_argument('--dev', type=Path, help='Dev data path',
+                        default="/Users/dailinfeng/Desktop/autoprompt_test/data/fact-retrieval/original/P17/dev.jsonl")
+    parser.add_argument('--template', type=str, help='Template string',
+                        default="[CLS] {masked_sentence} [T] [T] [T]  . [SEP]")
     parser.add_argument('--label-map', type=str, default=None, help='JSON object defining label map')
 
     # LAMA-specific
@@ -547,14 +552,14 @@ if __name__ == '__main__':
                         help='Prints best trigger in LAMA format.')
 
     parser.add_argument('--initial-trigger', nargs='+', type=str, default=None, help='Manual prompt')
-    parser.add_argument('--label-field', type=str, default='label',
+    parser.add_argument('--label-field', type=str, default='obj_label',
                         help='Name of the label field')
 
     parser.add_argument('--bsz', type=int, default=32, help='Batch size')
     parser.add_argument('--eval-size', type=int, default=256, help='Eval size')
     parser.add_argument('--iters', type=int, default=100,
                         help='Number of iterations to run trigger search algorithm')
-    parser.add_argument('--accumulation-steps', type=int, default=10)
+    parser.add_argument('--accumulation-steps', type=int, default=1)
     parser.add_argument('--model-name', type=str, default='bert-base-cased',
                         help='Model name passed to HuggingFace AutoX classes.')
     parser.add_argument('--seed', type=int, default=0)
