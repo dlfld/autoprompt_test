@@ -554,7 +554,6 @@ if __name__ == '__main__':
     parser.add_argument('--initial-trigger', nargs='+', type=str, default=None, help='Manual prompt')
     parser.add_argument('--label-field', type=str, default='obj_label',
                         help='Name of the label field')
-
     parser.add_argument('--bsz', type=int, default=32, help='Batch size')
     parser.add_argument('--eval-size', type=int, default=256, help='Eval size')
     parser.add_argument('--iters', type=int, default=100,
