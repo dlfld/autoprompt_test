@@ -151,10 +151,10 @@ def wirte_jsonl(file_jsonl_path, datas):
 
 def hangdel_datas(file_path):
     origin_data = joblib.load(file_path)
-    _, tokenizer = load_plm("/Users/dailinfeng/Desktop/autoprompt_test/model/bert_large_chinese")
+    _, tokenizer = load_plm(Config.pretrain_models[0])
 
 if __name__ == '__main__':
     test_data = joblib.load("test.data")[:1]
     print(test_data)
-    model, tokenizer = load_plm("/Users/dailinfeng/Desktop/autoprompt_test/model/bert_large_chinese")
+    model, tokenizer = load_plm(Config.pretrain_models[0])
     train_data_instances = load_instance_data(test_data, tokenizer, Config, is_train_data=True)
