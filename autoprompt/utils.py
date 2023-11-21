@@ -5,12 +5,14 @@ import logging
 import random
 from collections import defaultdict
 
-import logddd
+import joblib
 import torch
 from torch.nn.utils.rnn import pad_sequence
 
-MAX_CONTEXT_LEN = 50
+from autoprompt.data_handle.Config import Config
+from autoprompt.data_handle.main import hangdel_datas
 
+MAX_CONTEXT_LEN = 50
 
 logger = logging.getLogger(__name__)
 
@@ -205,14 +207,128 @@ class TriggerTemplatizer:
         return model_inputs, label_id
 
 
+class LinkedTriggerTemplatizer:
+    # 这个类就是根据提示模板来构造提示句子的类
+    # 链式提示模板构造类
+    """
+    An object to facilitate creating transformers-friendly triggers inputs from a template.
+    我理解的就是模板构造器，就是根据模板构造提示句子
+    Parameters
+    ==========
+    template : str
+        The template string, comprised of the following tokens:
+            [T] to mark a trigger placeholder.
+            [P] to mark a prediction placeholder.
+            {fields} arbitrary fields instantiated from the dataset instances.
+        For example a NLI template might look like:
+            "[T] [T] [T] {premise} [P] {hypothesis}"
+    tokenizer : PretrainedTokenizer
+        A HuggingFace tokenizer. Must have special trigger and predict tokens.
+    add_special_tokens : bool
+        Whether or not to add special tokens when encoding. Default: False.
+    """
+
+    def __init__(self,
+                 template,
+                 config,
+                 tokenizer,
+                 label_field='label',
+                 label_map=None,
+                 tokenize_labels=False,
+                 add_special_tokens=False,
+                 use_ctx=False):
+        if not hasattr(tokenizer, 'predict_token') or \
+                not hasattr(tokenizer, 'trigger_token'):
+            raise ValueError(
+                'Tokenizer missing special trigger and predict tokens in vocab.'
+                'Use `utils.add_special_tokens` to add them.'
+            )
+        self._template = template
+        self._config = config
+        self._tokenizer = tokenizer
+        # 标签字段名
+        self._label_field = label_field
+        self._label_map = label_map
+        self._tokenize_labels = tokenize_labels
+        self._add_special_tokens = add_special_tokens
+        self._use_ctx = use_ctx
+
+    @property
+    def num_trigger_tokens(self):
+        return sum(token == '[T]' for token in self._template.split())
+
+    def __call__(self, format_kwargs):
+        # Format the template string
+        # 整个输入 json
+        format_kwargs = format_kwargs.copy()
+        import logddd
+        logddd.log(format_kwargs)
+        logddd.log(self._template)
+        exit(0)
+        # 将句子数据提到最外面
+        format_kwargs["masked_sentence"] = format_kwargs["masked_sentence"].replace("[MASK]", "[P]")
+        # format_kwargs["masked_sentence"] = format_kwargs["masked_sentence"].replace("[MASK]", "[P]")
+        # 获取到标签
+        label = format_kwargs.pop(self._label_field)
+        text = self._template.format(**format_kwargs)
+
+        if label is None:
+            raise Exception(f'Bad data: {text}')
+
+        # Have the tokenizer encode the text and process the output to:
+        # - Create a trigger and predict mask
+        # - Replace the predict token with a mask token
+
+        # encode_plus 将文本分词后创建一个包含对应 id，token 类型及是否遮盖的词典；
+        # attention_mask 代表避免用注意力机制的时候关注到填充符 1代表没有mask的令牌，0代表mask的令牌
+        # token_type_ids token对应的句子id，值为0或1（0表示对应的token属于第一句，1表示属于第二句）
+        model_inputs = self._tokenizer.encode_plus(
+            text,
+            add_special_tokens=self._add_special_tokens,
+            return_tensors='pt'
+        )
+
+        input_ids = model_inputs['input_ids']
+        # trigger_mask 这个是trigger位置的标识向量，trigger位置位True
+        trigger_mask = input_ids.eq(self._tokenizer.trigger_token_id)
+        # 需要预测的位置，用[P]来表示
+        predict_mask = input_ids.eq(self._tokenizer.predict_token_id)
+        input_ids[predict_mask] = self._tokenizer.mask_token_id
+
+        model_inputs['trigger_mask'] = trigger_mask
+        model_inputs['predict_mask'] = predict_mask
+
+        # For relation extraction with BERT, update token_type_ids to reflect the two different sequences
+        if self._use_ctx and self._config.model_type == 'bert':
+            sep_token_indices = (input_ids.squeeze(0) == self._tokenizer.convert_tokens_to_ids(
+                self._tokenizer.sep_token)).nonzero().flatten()
+            sequence_b_indices = torch.arange(sep_token_indices[0], sep_token_indices[1] + 1).long().unsqueeze(0)
+            model_inputs['token_type_ids'].scatter_(1, sequence_b_indices, 1)
+
+        # Encode the label(s)
+        # if self._label_map is not None:
+        #     label = self._label_map[label]
+
+        label_id = encode_label(
+            tokenizer=self._tokenizer,
+            label=label,
+            tokenize=self._tokenize_labels
+        )
+        return model_inputs, label_id
+
+
 def add_task_specific_tokens(tokenizer):
+    special_tokens = Config.special_labels
+    special_tokens.extend(["[T]", "[P]", "[Y]"])
     tokenizer.add_special_tokens({
-        'additional_special_tokens': ['[T]', '[P]', '[Y]']
+        'additional_special_tokens': special_tokens
     })
+    # tokenizer.add_special_tokens({'additional_special_tokens': Config.special_labels})
     tokenizer.trigger_token = '[T]'
     tokenizer.trigger_token_id = tokenizer.convert_tokens_to_ids('[T]')
     tokenizer.predict_token = '[P]'
     tokenizer.predict_token_id = tokenizer.convert_tokens_to_ids('[P]')
+
     # NOTE: BERT and RoBERTa tokenizers work properly if [X] is not a special token...
     # tokenizer.lama_x = '[X]'
     # tokenizer.lama_x_id = tokenizer.convert_tokens_to_ids('[X]')
@@ -234,59 +350,100 @@ def load_jsonl(fname):
             yield json.loads(line)
 
 
+def load_data(fname, test=False):
+    """
+        加载data数据
+        test:是否是测试数据集
+        训练数据集是以n折交叉验证的方式存储的，要多一个维度
+    """
+    origin_data = joblib.load(fname)
+    if test:
+        origin_data = [origin_data]
+    """
+    返回格式如下
+        [
+            [
+                [{"masked_sentence":"","obj_label":""},{"masked_sentence":"","obj_label":""}] sentence
+                [{"masked_sentence":"","obj_label":""},{"masked_sentence":"","obj_label":""}] sentence
+            ]，fold
+            [fold]
+        ]
+    """
+    folds = []
+    for fold in origin_data:
+        fold_datas = hangdel_datas(fold)
+        folds.append(fold_datas)
+    return folds
+
+
 LOADERS = {
     '.tsv': load_tsv,
-    '.jsonl': load_jsonl
+    '.jsonl': load_jsonl,
+    '.data': load_data
 }
 
 
-def load_trigger_dataset(fname, templatizer, use_ctx, limit=None):
+def load_trigger_dataset(fname, templatizer, use_ctx, limit=None, test=False):
     loader = LOADERS[fname.suffix]
     instances = []
-
-    for x in loader(fname):
-        # 一行一行的加载json文件进来
-        try:
-            # 默认的参数没有执行这个if，而是走到了else
-            if use_ctx:
-                # For relation extraction, skip facts that don't have context sentence
-                # 如果数据集里面的这条数据没有具体的mask句子（evidences）存储的原始加mask的句子
-                if 'evidences' not in x:
-                    logger.warning('Skipping RE sample because it lacks context sentences: {}'.format(x))
-                    continue
-
-                evidences = x['evidences']
-                    
-                # Randomly pick a context sentence
-                # 随机选取上下文
-                obj_surface, masked_sent = random.choice([(evidence['obj_surface'], evidence['masked_sentence']) for evidence in evidences])
-
-                words = masked_sent.split()
-                # 如果当前选则的单词超过了预设的单词数量，那就截断
-                # 不要这个设置
-                if len(words) > MAX_CONTEXT_LEN:
-                    # If the masked sentence is too long, use the first X tokens. For training we want to keep as many samples as we can.
-                    masked_sent = ' '.join(words[:MAX_CONTEXT_LEN])
-
-                # 我理解的意思是，当前是随机抽取的上下文，这个上下文内肯定就不能有MASK了，因此如果
-                # 抽取到的上下文中有mask，那就需要将它替换为其他的token
-                # If truncated context sentence still has MASK, we need to replace it with object surface
-                # We explicitly use [MASK] because all TREx fact's context sentences use it
-                context = masked_sent.replace('[MASK]', obj_surface)
-                print("\n\n\n")
-                print(context)
-                print("\n\n\n")
-
-                x['context'] = context
-                model_inputs, label_id = templatizer(x)
-            else:
-                model_inputs, label_id = templatizer(x)
-        except ValueError as e:
-            logger.warning('Encountered error "%s" when processing "%s".  Skipping.', e, x)
-            continue
-        else:
-            instances.append((model_inputs, label_id))
+    # 加载一个数据集
+    for fold in loader(fname, test):
+        fold_instances = []
+        # 遍历每一条数据 这是一条句子生成的一组prompt
+        for sencence in fold:
+            # 这是一条句子生成的若干个promt句子
+            sencence_instances = []
+            for prompt in sencence:
+                # 模版化提示句子
+                model_inputs, label_id = templatizer(prompt)
+                sencence_instances.append((model_inputs, label_id))
+            fold_instances.append(sencence_instances)
+        instances.append(fold_instances)
     return instances
+
+    # for x in loader(fname):
+    #     # 一行一行的加载json文件进来
+    #     try:
+    #         # 默认的参数没有执行这个if，而是走到了else
+    #         if use_ctx:
+    #             # For relation extraction, skip facts that don't have context sentence
+    #             # 如果数据集里面的这条数据没有具体的mask句子（evidences）存储的原始加mask的句子
+    #             if 'evidences' not in x:
+    #                 logger.warning('Skipping RE sample because it lacks context sentences: {}'.format(x))
+    #                 continue
+    #
+    #             evidences = x['evidences']
+    #
+    #             # Randomly pick a context sentence
+    #             # 随机选取上下文
+    #             obj_surface, masked_sent = random.choice([(evidence['obj_surface'], evidence['masked_sentence']) for evidence in evidences])
+    #
+    #             words = masked_sent.split()
+    #             # 如果当前选则的单词超过了预设的单词数量，那就截断
+    #             # 不要这个设置
+    #             if len(words) > MAX_CONTEXT_LEN:
+    #                 # If the masked sentence is too long, use the first X tokens. For training we want to keep as many samples as we can.
+    #                 masked_sent = ' '.join(words[:MAX_CONTEXT_LEN])
+    #
+    #             # 我理解的意思是，当前是随机抽取的上下文，这个上下文内肯定就不能有MASK了，因此如果
+    #             # 抽取到的上下文中有mask，那就需要将它替换为其他的token
+    #             # If truncated context sentence still has MASK, we need to replace it with object surface
+    #             # We explicitly use [MASK] because all TREx fact's context sentences use it
+    #             context = masked_sent.replace('[MASK]', obj_surface)
+    #             print("\n\n\n")
+    #             print(context)
+    #             print("\n\n\n")
+    #
+    #             x['context'] = context
+    #             model_inputs, label_id = templatizer(x)
+    #         else:
+    #             model_inputs, label_id = templatizer(x)
+    #     except ValueError as e:
+    #         logger.warning('Encountered error "%s" when processing "%s".  Skipping.', e, x)
+    #         continue
+    #     else:
+    #         instances.append((model_inputs, label_id))
+    # return instances
     # if limit:
     #     return random.sample(instances, limit)
     # else:

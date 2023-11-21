@@ -4,7 +4,7 @@ import joblib
 from tqdm.auto import tqdm
 from transformers import BertConfig, AutoTokenizer, AutoModelForMaskedLM
 
-from data.ud.Config import Config
+from autoprompt.data_handle.Config import Config
 
 
 def generate_prompt(sentence: str, word: str, pre_part_of_speech: str, pre_word: str, part_of_speech: str) -> str:
@@ -149,12 +149,52 @@ def wirte_jsonl(file_jsonl_path, datas):
         for data in datas:
             file_jsonl.write(data)
 
-def hangdel_datas(file_path):
-    origin_data = joblib.load(file_path)
+
+def hangdel_datas(origin_data):
+    """
+        把数据集转换成jsonl格式的，对接autoprompt
+        {
+            masked_sentence:""， 带有mask位置的提示句子
+            obj_label:"" label
+        }
+        return: List
+    """
     _, tokenizer = load_plm(Config.pretrain_models[0])
+    # train_data_instances 里面存的是n条句子的所有prompts
+    train_data_instances = load_instance_data(origin_data, tokenizer, Config, is_train_data=True)
+    res_data = []
+    # 遍历每一条句子
+    for sentence_idx, sentence in enumerate(train_data_instances):
+
+        prompts = sentence[0]
+        labels = sentence[1]
+        sentence_data = []
+        # 原始句子
+        cur_sentence_origin_data = origin_data[sentence_idx][0]
+        # 遍历每一条prompt
+        for idx, prompt in enumerate(prompts):
+            data = {
+                "masked_sentence": prompt,
+                "obj_label": labels[idx],
+                "sentence": cur_sentence_origin_data.replace("/", ""),
+                # 当前单词
+                "word": cur_sentence_origin_data.split("/")[idx],
+                # 当前单词的前一个单词
+                "pre_word": "[CLS]" if idx == 0 else cur_sentence_origin_data.split("/")[idx - 1],
+                "pre_word_label": "[CLS]" if idx == 0 else "[PLB]"
+            }
+            sentence_data.append(data)
+        # import logddd
+        # for item in sentence_data:
+        #     logddd.log(item)
+        # exit(0)
+        res_data.append(sentence_data)
+    return res_data
+
 
 if __name__ == '__main__':
-    test_data = joblib.load("test.data")[:1]
-    print(test_data)
-    model, tokenizer = load_plm(Config.pretrain_models[0])
-    train_data_instances = load_instance_data(test_data, tokenizer, Config, is_train_data=True)
+    file_path = "../../data/ud/fold/5.data"
+    origin_data = joblib.load(file_path)[:1]
+    for fold in origin_data:
+        hangdel_datas(fold)
+    # hangdel_datas("../../data/ud/test.data")

@@ -254,7 +254,7 @@ def run_model(args):
         logger.info('No label map')
 
     # 构造模板的方法
-    templatizer = utils.TriggerTemplatizer(
+    templatizer = utils.LinkedTriggerTemplatizer(
         args.template,
         config,
         tokenizer,
@@ -294,68 +294,49 @@ def run_model(args):
     if args.perturbed:
         train_dataset = utils.load_augmented_trigger_dataset(args.train, templatizer, limit=args.limit)
     else:
+        # 这个返回的并不是一次训练的数据，而是5个fold的所有数据
         train_dataset = utils.load_trigger_dataset(args.train, templatizer, use_ctx=args.use_ctx, limit=args.limit)
-
+        # 这个是取第一折交叉验证的数据
+        train_dataset = train_dataset[0]
+    # 目前train_dataset内的内容是n条句子，其中每一条句子有m条prompt
     # 分batch
     train_loader = DataLoader(train_dataset, batch_size=args.bsz, shuffle=True, collate_fn=collator)
 
     if args.perturbed:
         dev_dataset = utils.load_augmented_trigger_dataset(args.dev, templatizer)
     else:
-        dev_dataset = utils.load_trigger_dataset(args.dev, templatizer, use_ctx=args.use_ctx)
-    dev_loader = DataLoader(dev_dataset, batch_size=args.eval_size, shuffle=False, collate_fn=collator)
+        dev_dataset = utils.load_trigger_dataset(args.dev, templatizer, use_ctx=args.use_ctx, test=True)
+        # load_trigger_dataset 是按照5折交叉验证搞的，因此对应验证集而言，就要取第一个，因为他只有一个
+        dev_dataset = dev_dataset[0]
 
-    # To "filter" unwanted trigger tokens, we subtract a huge number from their logits.
-    filter = torch.zeros(tokenizer.vocab_size, dtype=torch.float32, device=device)
-    if args.filter:
-        logger.info('Filtering label tokens.')
-        if label_map:
-            for label_tokens in label_map.values():
-                label_ids = utils.encode_label(tokenizer, label_tokens).unsqueeze(0)
-                filter[label_ids] = -1e32
-        else:
-            for _, label_ids in train_dataset:
-                filter[label_ids] = -1e32
-        logger.info('Filtering special tokens and capitalized words.')
-        for word, idx in tokenizer.get_vocab().items():
-            if len(word) == 1 or idx >= tokenizer.vocab_size:
-                continue
-            # Filter special tokens.
-            if idx in tokenizer.all_special_ids:
-                logger.debug('Filtered: %s', word)
-                filter[idx] = -1e32
-            # Filter capitalized words (lazy way to remove proper nouns).
-            if isupper(idx, tokenizer):
-                logger.debug('Filtered: %s', word)
-                filter[idx] = -1e32
-
+    dev_loader = DataLoader(dev_dataset, batch_size=args.eval_size, shuffle=False)
     logger.info('Evaluating')
     numerator = 0
     denominator = 0
-    for model_inputs, labels in tqdm(dev_loader):
-        model_inputs = {k: v.to(device) for k, v in model_inputs.items()}
-        labels = labels.to(device)
-        with torch.no_grad():
-            # logddd.log(model_inputs)
-            # logddd.log(trigger_ids)
-            # logddd.log(labels)
+    # dev_loader是以句子为单位的，
+    # 遍历每一个batch中的句子，batch_size 是1 所以是一条句子一条句子的处理
+    for sentence in tqdm(dev_loader):
+        # 遍历每一个句子
+        for model_inputs, labels in sentence:
+            model_inputs = {k: v[0].to(device) for k, v in model_inputs.items()}
+            labels = labels.to(device)
+            logddd.log(model_inputs)
+            logddd.log(trigger_ids)
             # exit(0)
-            predict_logits = predictor(model_inputs, trigger_ids)
-            logddd.log(predict_logits.shape)
-            # exit(0)
-        numerator += evaluation_fn(predict_logits, labels).sum().item()
-        denominator += labels.size(0)
+            with torch.no_grad():
+                predict_logits = predictor(model_inputs, trigger_ids)
+                logddd.log(predict_logits.shape)
+                exit(0)
+            numerator += evaluation_fn(predict_logits, labels).sum().item()
+            denominator += labels.size(0)
     dev_metric = numerator / (denominator + 1e-13)
     logger.info(f'Dev metric: {dev_metric}')
 
     best_dev_metric = -float('inf')
     # Measure elapsed time of trigger search
     start = time.time()
-
     for i in range(args.iters):
-
         logger.info(f'Iteration: {i}')
-
         logger.info('Accumulating Gradient')
         model.zero_grad()
 
@@ -532,11 +513,18 @@ def run_model(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--train', type=Path, help='Train data path',
-                        default="/Users/dailinfeng/Desktop/autoprompt_test/data/fact-retrieval/original/P17/train.jsonl")
+                        # default="/Users/dailinfeng/Desktop/autoprompt_test/data/fact-retrieval/original/P17/train.jsonl"
+                        default="/Users/dailinfeng/Desktop/autoprompt_test/data/ud/fold/5.data"
+                        )
     parser.add_argument('--dev', type=Path, help='Dev data path',
-                        default="/Users/dailinfeng/Desktop/autoprompt_test/data/fact-retrieval/original/P17/dev.jsonl")
+                        # default="/Users/dailinfeng/Desktop/autoprompt_test/data/fact-retrieval/original/P17/dev.jsonl"
+                        default="/Users/dailinfeng/Desktop/autoprompt_test/data/ud/test.data"
+                        )
     parser.add_argument('--template', type=str, help='Template string',
-                        default="[CLS] {masked_sentence} [T] [T] [T]  . [SEP]")
+                        # default="[CLS] {masked_sentence} [T] [T] [T]  . [SEP]"
+                        default="在句子“{sentence}”中，[T] [T]“{word}” [T] [T] [T] [T] [T] [T] [T] {pre_word_label} [T] [T] [T] [T] [T]"
+                                "{pre_word} [T] [T] [T],[T] [T] [T] [T] {word} [T] [T] [T] [T] “[MASK]”→ {obj_label}"
+                        )
     parser.add_argument('--label-map', type=str, default=None, help='JSON object defining label map')
 
     # LAMA-specific
@@ -554,8 +542,8 @@ if __name__ == '__main__':
     parser.add_argument('--initial-trigger', nargs='+', type=str, default=None, help='Manual prompt')
     parser.add_argument('--label-field', type=str, default='obj_label',
                         help='Name of the label field')
-    parser.add_argument('--bsz', type=int, default=32, help='Batch size')
-    parser.add_argument('--eval-size', type=int, default=256, help='Eval size')
+    parser.add_argument('--bsz', type=int, default=1, help='Batch size')
+    parser.add_argument('--eval-size', type=int, default=1, help='Eval size')
     parser.add_argument('--iters', type=int, default=100,
                         help='Number of iterations to run trigger search algorithm')
     parser.add_argument('--accumulation-steps', type=int, default=1)
